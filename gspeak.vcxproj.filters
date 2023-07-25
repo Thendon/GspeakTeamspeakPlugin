@@ -15,12 +15,18 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="gspeak.h">
+    <ClInclude Include="source\gspeak.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="source\shared.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="gspeak.cpp">
+    <ClCompile Include="source\gspeak.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="source\shared.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>

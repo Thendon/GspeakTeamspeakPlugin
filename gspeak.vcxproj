@@ -167,10 +167,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="gspeak.h" />
+    <ClInclude Include="source\gspeak.h" />
+    <ClInclude Include="source\shared.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="gspeak.cpp" />
+    <ClCompile Include="source\gspeak.cpp" />
+    <ClCompile Include="source\shared.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
