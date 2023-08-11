@@ -61,7 +61,7 @@ extern "C" {
 	PLUGINS_EXPORTDLL void gs_statusThread();
 	PLUGINS_EXPORTDLL void gs_cmdCheck(uint64 serverConnectionHandlerID, anyID clientID);
 	PLUGINS_EXPORTDLL bool gs_nameCheck(uint64 serverConnectionHandlerID, anyID clientID);
-	PLUGINS_EXPORTDLL bool gs_findClientIndex(anyID clientID, int* clientIndex);
+	//PLUGINS_EXPORTDLL bool gs_findClientIndex(anyID clientID, int& clientIndex);
 
 	PLUGINS_EXPORTDLL void ts3plugin_onClientMoveEvent(uint64 serverConnectionHandlerID, anyID clientID, uint64 oldChannelID, uint64 newChannelID, int visibility, const char* moveMessage);
 	PLUGINS_EXPORTDLL void ts3plugin_onClientMoveMovedEvent(uint64 serverConnectionHandlerID, anyID clientID, uint64 oldChannelID, uint64 newChannelID, int visibility, anyID moverID, const char* moverName, const char* moverUniqueIdentifier, const char* moveMessage);

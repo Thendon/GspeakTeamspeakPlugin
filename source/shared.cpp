@@ -1,8 +1,14 @@
 #include "shared.h"
 
-//bool gs_inChannel(Status* status) {
-//	return status->clientID > -1;
-//}
+int gs_findClientIndex(const Clients* clients, int clientID)
+{
+	for (int i = 0; i < PLAYER_MAX; i++)
+	{
+		if (clients[i].clientID != clientID)
+			return i;
+	}
+	return -1;
+}
 
 //Not realy save to say though
 bool gs_gmodOnline(Status* status) {

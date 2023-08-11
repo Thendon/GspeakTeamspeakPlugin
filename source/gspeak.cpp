@@ -132,7 +132,7 @@ int ts3plugin_init()
 	{
 		return 1;
 	}
-	status = (Status*)malloc(sizeof(Status));
+	//status = (Status*)malloc(sizeof(Status));
 	status = (Status*)MapViewOfFile(hMapFileV, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Status));
 	if (status == NULL)
 	{
@@ -221,7 +221,7 @@ void gs_setActive(uint64 serverConnectionHandlerID, uint64 channelID)
 
 void gs_shutdown()
 {
-	status->gspeakV = -1;
+	status->gspeakV = 0;
 
 	if (clientThreadActive)
 		gs_shutClients();
@@ -280,28 +280,34 @@ bool gs_openMapFile(HANDLE* hMapFile, TCHAR* name, unsigned int buf_size)
 
 bool gs_searchChannel(uint64 serverConnectionHandlerID, anyID clientID)
 {
+	ts3Functions.printMessageToCurrentTab("[Gspeak] try switching into Gspeak channel");
+
 	uint64* channels;
-	if (ts3Functions.getChannelList(serverConnectionHandlerID, &channels) == ERROR_ok)
+	if (ts3Functions.getChannelList(serverConnectionHandlerID, &channels) != ERROR_ok)
+		return false;
+
+	uint64 localChannelID;
+	if (ts3Functions.getChannelOfClient(serverConnectionHandlerID, clientID, &localChannelID) != ERROR_ok)
+		return false;
+
+	if (gs_isChannel(serverConnectionHandlerID, localChannelID))
+		return true;
+
+	for (int i = 0; channels[i]; i++)
 	{
-		uint64 localChannelID;
-		if (ts3Functions.getChannelOfClient(serverConnectionHandlerID, clientID, &localChannelID) != ERROR_ok)
-			return false;
+		if (channels[i] == localChannelID)
+			continue;
 
-		if (gs_isChannel(serverConnectionHandlerID, localChannelID))
-			return true;
-
-		for (int i = 0; channels[i]; i++)
+		if (gs_isChannel(serverConnectionHandlerID, channels[i]))
 		{
-			if (channels[i] == localChannelID)
-				continue;
+			//if (ts3Functions.requestClientMove(serverConnectionHandlerID, clientID, channels[i], status->password, NULL) == ERROR_ok)
 
-			if (gs_isChannel(serverConnectionHandlerID, channels[i]))
-			{
-				if (ts3Functions.requestClientMove(serverConnectionHandlerID, clientID, channels[i], status->password, NULL) == ERROR_ok)
-					return true;
-			}
+			//if we didnt succeed in joining the found channel, something is wrong (e.g server config, wrong server) and we should stop trying anyways
+			ts3Functions.requestClientMove(serverConnectionHandlerID, clientID, channels[i], status->password, NULL);
+			return true;
 		}
 	}
+
 	return false;
 }
 
@@ -327,23 +333,31 @@ void gs_clientMoved(uint64 serverConnectionHandlerID, anyID clientID, uint64 cha
 
 bool gs_isChannel(uint64 serverConnectionHandlerID, uint64 channelID)
 {
+	if (channelID == status->channelId)
+		return true;
+
 	char* chname;
-	if (ts3Functions.getChannelVariableAsString(serverConnectionHandlerID, channelID, CHANNEL_NAME, &chname) == ERROR_ok)
-	{
-		std::string str(chname);
-		if (str.find("Gspeak") != string::npos || str.find("GSpeak"))
-		{ //MAY CHANGE TO ID
-			return true;
-		}
-	}
+	if (ts3Functions.getChannelVariableAsString(serverConnectionHandlerID, channelID, CHANNEL_NAME, &chname) != ERROR_ok)
+		return false;
+
+	if (strcmp(chname, status->channelName) == 0)
+		return true;
+
+	std::string chnameString(chname);
+	if (chnameString.find("Gspeak") != string::npos || chnameString.find("GSpeak") != string::npos)
+		return true;
+
 	return false;
 }
 
 void gs_scanClients(uint64 serverConnectionHandlerID)
 {
 	TS3_VECTOR position;
-	for (int i = 0; clients[i].clientID != 0 && i < PLAYER_MAX; i++)
+	for (int i = 0; i < PLAYER_MAX; i++)
 	{
+		if (clients[i].clientID == 0)
+			continue;
+
 		position.x = clients[i].pos[0];
 		position.y = clients[i].pos[1];
 		position.z = clients[i].pos[2];
@@ -365,15 +379,20 @@ void gs_cmdCheck(uint64 serverConnectionHandlerID, anyID clientID)
 	case CMD_FORCEMOVE:
 		success = gs_searchChannel(serverConnectionHandlerID, clientID);
 		break;
+	//case 123:
+		//get client unique identity somehow 
+		//ts3Functions.startConnection startConnection(serverConnectionHandlerID, )
+		//break;
 	}
 
-	if (!success)
+	status->command = success ? -1 : -2;
+	/*if (!success)
 	{
 		status->command = -2;
 		return;
 	}
 
-	status->command = -1;
+	status->command = -1;*/
 }
 /*
 void gs_kickClient(uint64 serverConnectionHandlerID, anyID clientID) {
@@ -501,18 +520,6 @@ void gs_statusThread()
 	printf("[Gspeak] statusThread destroyed\n");
 }
 
-bool gs_findClientIndex(anyID clientID, int* clientIndex)
-{
-	for (int i = 0; clients[i].clientID != 0 && i < PLAYER_MAX; i++)
-	{
-		if (clients[i].clientID != clientID)
-			continue;
-		*clientIndex = i;
-		return true;
-	}
-	return false;
-}
-
 void ts3plugin_onClientDisplayNameChanged(uint64 serverConnectionHandlerID, anyID clientID, const char* displayName, const char* uniqueClientIdentifier)
 {
 	gs_setStatusName(serverConnectionHandlerID, clientID, (char*)displayName);
@@ -562,11 +569,11 @@ void ts3plugin_onTalkStatusChangeEvent(uint64 serverConnectionHandlerID, int tal
 	}
 	else
 	{
-		int it = 0;
-		if (gs_findClientIndex(clientID, &it))
+		int index = gs_findClientIndex(clients, clientID);
+		if (index != -1)
 		{
 			if (talkStatus != STATUS_TALKING)
-				clients[it].talking = false;
+				clients[index].talking = false;
 		}
 	}
 }
@@ -580,13 +587,12 @@ void ts3plugin_onCustom3dRolloffCalculationClientEvent(uint64 serverConnectionHa
 
 void voiceEffect_mute(short* samples, int sampleCount, int channels)
 {
-	for (int i = 0; i < sampleCount; i++)
+	for (int i = 0; i < sampleCount * channels; i++)
 	{
-		short sample_it = i * channels;
+		samples[i] = 0;
+		/*short sample_it = i * channels;
 		for (int j = 0; j < channels; j++)
-		{
-			samples[sample_it + j] = 0;
-		}
+			samples[sample_it + j] = 0;*/
 	}
 }
 
@@ -603,26 +609,22 @@ void voiceEffect_radio(short* samples, int sample_it, int channels, float client
 		//Distortion
 		short sample_new = (short)((samples[sample_it] > status->radio_distortion ? status->radio_distortion : samples[sample_it] < status->radio_distortion * (-1) ? status->radio_distortion * (-1) : samples[sample_it]) * status->radio_volume * clientVolume);
 		short sample_noise = (short)(sample_new + noise * status->radio_volume_noise);
-		//Downsampling future samples
-		bool temp_bool = false;
+		//Downsampling override future samples
+		bool swap = false;
 		for (int n = 0; n < status->radio_downsampler; n++)
 		{
+			//i dont get the swapping part
 			int temp_it = sample_it + j + n * channels;
-			if (temp_bool)
-			{
+			if (swap)
 				samples[temp_it] = sample_noise;
-				temp_bool = false;
-			}
 			else
-			{
 				samples[temp_it] = sample_new;
-				temp_bool = true;
-			}
+			swap = !swap;
 		}
 	}
 }
 
-void voidEffect_normal(short* samples, int sample_it, int channels, float clientVolume)
+void voiceEffect_normal(short* samples, int sample_it, int channels, float clientVolume)
 {
 	for (int j = 0; j < channels; j++)
 	{
@@ -634,14 +636,14 @@ void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 serverConnectionHandlerID,
 {
 	if (!clientThreadActive)
 		return;
-	int it = 0;
-	if (!gs_findClientIndex(clientID, &it))
+	int index = gs_findClientIndex(clients, clientID);
+	if (index == -1)
 	{
 		voiceEffect_mute(samples, sampleCount, channels);
 		return;
 	}
 
-	Clients& client = clients[it];
+	Clients &client = clients[index];
 	//If volume between 0 and 1
 	float clientVolume = min(client.volume_gm, 1.0f);
 	if (clientVolume <= 0)
@@ -654,28 +656,23 @@ void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 serverConnectionHandlerID,
 	//data has to be processed => client must be talking
 	if (client.talking != true)
 		client.talking = true;
-	//If volume between 0 and 1
-	float clientVolume = min(client.volume_gm, 1.0f);
-	if (clientVolume > 0)
-	{
-		float totalSampleVolume = 0;
-		for (int i = 0; i < sampleCount; i++)
-		{
-			unsigned short sample_it = i * channels;
-			//Average volume detection for mouth move animation
-			totalSampleVolume += min(abs(samples[sample_it]), (short)VOLUME_MAX);
 
-			if (client.radio)
-			{
-				voiceEffect_radio(samples, sample_it, channels, clientVolume);
-			}
-			else
-			{
-				voidEffect_normal(samples, sample_it, channels, clientVolume);
-			}
+	float totalSampleVolume = 0;
+	for (int i = 0; i < sampleCount; i++)
+	{
+		unsigned short sample_it = i * channels;
+		//Average volume detection for mouth move animation
+		totalSampleVolume += min(abs(samples[sample_it]), (short)VOLUME_MAX);
+
+		if (client.radio)
+		{
+			voiceEffect_radio(samples, sample_it, channels, clientVolume);
 		}
-		//Sending average volume to Gmod
-		client.volume_ts = totalSampleVolume / sampleCount / VOLUME_MAX;
-		return;
+		else
+		{
+			voiceEffect_normal(samples, sample_it, channels, clientVolume);
+		}
 	}
+	//Sending average volume to Gmod
+	client.volume_ts = totalSampleVolume / sampleCount / VOLUME_MAX;
 }
