@@ -1,8 +1,3 @@
-/*
-* Gspeak 2.7
-* by Thendon.exe
-* Sneaky Rocks
-*/
 
 #ifndef GSPEAK_H
 #define GSPEAK_H
@@ -13,12 +8,12 @@
 #define PLUGINS_EXPORTDLL __attribute__ ((visibility("default")))
 #endif
 
-#define NAME_BUF 32
-#define PASS_BUF 32
-#define PLAYER_MAX 64
-
-#define CMD_RENAME 1
-#define CMD_FORCEMOVE 2
+//#define NAME_BUF 32
+//#define PASS_BUF 32
+//#define PLAYER_MAX 64
+//
+//#define CMD_RENAME 1
+//#define CMD_FORCEMOVE 2
 
 struct Client {
 	short clientID;

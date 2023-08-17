@@ -1,8 +1,3 @@
-/*
-* Gspeak 2.7
-* by Thendon.exe
-* Sneaky Rocks
-*/
 
 #ifdef _WIN32
 #pragma warning (disable : 4100)  /* Disable Unreferenced parameter warning */
@@ -59,16 +54,16 @@ static int wcharToUtf8(const wchar_t* str, char** result)
 }
 #endif
 
-struct Clients* clients;
-struct Status* status;
-
-std::list<Client> clientList;
-
-HANDLE hMapFileO;
-HANDLE hMapFileV;
-
-TCHAR clientName[] = TEXT("Local\\GMapO");
-TCHAR statusName[] = TEXT("Local\\GMapV");
+//struct Clients* Shared::clients();
+//struct Status* Shared::status();
+//
+//std::list<Client> clientList;
+//
+//HANDLE hMapFileO;
+//HANDLE hMapFileV;
+//
+//TCHAR clientName[] = TEXT("Local\\GMapO");
+//TCHAR statusName[] = TEXT("Local\\GMapV");
 
 bool statusThreadActive;
 bool statusThreadBreak;
@@ -76,6 +71,8 @@ bool clientThreadActive;
 bool clientThreadBreak;
 
 using namespace std;
+using namespace Gspeak;
+
 //*************************************
 // REQUIRED TEAMSPEAK3 FUNCTIONS
 //*************************************
@@ -127,25 +124,38 @@ int ts3plugin_init()
 {
 	printf("[Gspeak] init\n");
 
-	//Open shared memory struct: status
-	if (!gs_openMapFile(&hMapFileV, statusName, sizeof(Status)))
+	//Open shared memory struct: Shared::status()
+	
+
+	//if (!gs_openMapFile(&hMapFileV, statusName, sizeof(Status)))
+	//{
+	//	return 1;
+	//}
+	////Shared::status() = (Status*)malloc(sizeof(Status));
+	//Shared::status() = (Status*)MapViewOfFile(hMapFileV, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Status));
+	//if (Shared::status() == NULL)
+	//{
+	//	gs_criticalError(GetLastError());
+	//	printf("[Gspeak] could not view file\n");
+	//	CloseHandle(hMapFileV);
+	//	hMapFileV = NULL;
+	//	return 1;
+	//}
+
+	HMAP_RESULT result = Shared::openStatus();
+
+	if (result != HMAP_RESULT::SUCCESS)
 	{
+		int err = GetLastError();
+		gs_criticalError(err);
+		printf("[Gspeak] open status map failed " + result + '\n');
 		return 1;
 	}
-	//status = (Status*)malloc(sizeof(Status));
-	status = (Status*)MapViewOfFile(hMapFileV, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Status));
-	if (status == NULL)
-	{
-		gs_criticalError(GetLastError());
-		printf("[Gspeak] could not view file\n");
-		CloseHandle(hMapFileV);
-		hMapFileV = NULL;
-		return 1;
-	}
-	status->gspeakV = GSPEAK_VERSION;
-	status->command = 0;
-	status->clientID = 0;
-	status->inChannel = false;
+
+	Shared::status()->gspeakV = GSPEAK_VERSION;
+	Shared::status()->command = 0;
+	Shared::status()->clientID = 0;
+	Shared::status()->inChannel = false;
 
 	//Check for Gspeak Channel
 	uint64 serverID = ts3Functions.getCurrentServerConnectionHandlerID();
@@ -221,7 +231,7 @@ void gs_setActive(uint64 serverConnectionHandlerID, uint64 channelID)
 
 void gs_shutdown()
 {
-	status->gspeakV = 0;
+	Shared::status()->gspeakV = 0;
 
 	if (clientThreadActive)
 		gs_shutClients();
@@ -231,10 +241,11 @@ void gs_shutdown()
 	{
 		if (!clientThreadActive && !statusThreadActive)
 		{
-			UnmapViewOfFile(status);
+			/*UnmapViewOfFile(Shared::status());
 			CloseHandle(hMapFileV);
 			hMapFileV = NULL;
-			status = NULL;
+			Shared::status() = NULL;*/
+			Shared::closeStatus();
 			break;
 		}
 		this_thread::sleep_for(chrono::milliseconds(SCAN_SPEED));
@@ -300,10 +311,10 @@ bool gs_searchChannel(uint64 serverConnectionHandlerID, anyID clientID)
 
 		if (gs_isChannel(serverConnectionHandlerID, channels[i]))
 		{
-			//if (ts3Functions.requestClientMove(serverConnectionHandlerID, clientID, channels[i], status->password, NULL) == ERROR_ok)
+			//if (ts3Functions.requestClientMove(serverConnectionHandlerID, clientID, channels[i], Shared::status()->password, NULL) == ERROR_ok)
 
 			//if we didnt succeed in joining the found channel, something is wrong (e.g server config, wrong server) and we should stop trying anyways
-			ts3Functions.requestClientMove(serverConnectionHandlerID, clientID, channels[i], status->password, NULL);
+			ts3Functions.requestClientMove(serverConnectionHandlerID, clientID, channels[i], Shared::status()->password, NULL);
 			return true;
 		}
 	}
@@ -333,14 +344,14 @@ void gs_clientMoved(uint64 serverConnectionHandlerID, anyID clientID, uint64 cha
 
 bool gs_isChannel(uint64 serverConnectionHandlerID, uint64 channelID)
 {
-	if (channelID == status->channelId)
+	if (channelID == Shared::status()->channelId)
 		return true;
 
 	char* chname;
 	if (ts3Functions.getChannelVariableAsString(serverConnectionHandlerID, channelID, CHANNEL_NAME, &chname) != ERROR_ok)
 		return false;
 
-	if (strcmp(chname, status->channelName) == 0)
+	if (strcmp(chname, Shared::status()->channelName) == 0)
 		return true;
 
 	std::string chnameString(chname);
@@ -355,23 +366,23 @@ void gs_scanClients(uint64 serverConnectionHandlerID)
 	TS3_VECTOR position;
 	for (int i = 0; i < PLAYER_MAX; i++)
 	{
-		if (clients[i].clientID == 0)
+		if (Shared::clients()[i].clientID == 0)
 			continue;
 
-		position.x = clients[i].pos[0];
-		position.y = clients[i].pos[1];
-		position.z = clients[i].pos[2];
-		ts3Functions.channelset3DAttributes(serverConnectionHandlerID, clients[i].clientID, &position);
+		position.x = Shared::clients()[i].pos[0];
+		position.y = Shared::clients()[i].pos[1];
+		position.z = Shared::clients()[i].pos[2];
+		ts3Functions.channelset3DAttributes(serverConnectionHandlerID, Shared::clients()[i].clientID, &position);
 	}
 }
 
 void gs_cmdCheck(uint64 serverConnectionHandlerID, anyID clientID)
 {
-	if (status->command <= 0)
+	if (Shared::status()->command <= 0)
 		return;
 
 	bool success = false;
-	switch (status->command)
+	switch (Shared::status()->command)
 	{
 	case CMD_RENAME:
 		success = gs_nameCheck(serverConnectionHandlerID, clientID);
@@ -385,14 +396,14 @@ void gs_cmdCheck(uint64 serverConnectionHandlerID, anyID clientID)
 		//break;
 	}
 
-	status->command = success ? -1 : -2;
+	Shared::status()->command = success ? -1 : -2;
 	/*if (!success)
 	{
-		status->command = -2;
+		Shared::status()->command = -2;
 		return;
 	}
 
-	status->command = -1;*/
+	Shared::status()->command = -1;*/
 }
 /*
 void gs_kickClient(uint64 serverConnectionHandlerID, anyID clientID) {
@@ -402,18 +413,18 @@ void gs_kickClient(uint64 serverConnectionHandlerID, anyID clientID) {
 
 bool gs_nameCheck(uint64 serverConnectionHandlerID, anyID clientID)
 {
-	if (!status->inChannel)
+	if (!Shared::status()->inChannel)
 		return false;
 
 	char* clientName;
 	ts3Functions.getClientVariableAsString(serverConnectionHandlerID, clientID, CLIENT_NICKNAME, &clientName);
 
-	if (strlen(status->name) < 1)
+	if (strlen(Shared::status()->name) < 1)
 		return true;
-	if (strcmp(clientName, status->name) == 0)
+	if (strcmp(clientName, Shared::status()->name) == 0)
 		return true;
 
-	if (ts3Functions.setClientSelfVariableAsString(serverConnectionHandlerID, CLIENT_NICKNAME, status->name) != ERROR_ok)
+	if (ts3Functions.setClientSelfVariableAsString(serverConnectionHandlerID, CLIENT_NICKNAME, Shared::status()->name) != ERROR_ok)
 		return false;
 
 	ts3Functions.flushClientSelfUpdates(serverConnectionHandlerID, NULL);
@@ -428,7 +439,7 @@ void gs_setStatusName(uint64 serverConnectionHandlerID, anyID clientID, char* cl
 		ts3Functions.getClientVariableAsString(serverConnectionHandlerID, clientID, CLIENT_NICKNAME, &clientName);
 
 	//causing crashes for special characters
-	strcpy_s(status->name, NAME_BUF * sizeof(char), clientName);
+	strcpy_s(Shared::status()->name, NAME_BUF * sizeof(char), clientName);
 }
 
 void gs_clientThread(uint64 serverConnectionHandlerID, uint64 channelID)
@@ -436,21 +447,30 @@ void gs_clientThread(uint64 serverConnectionHandlerID, uint64 channelID)
 	clientThreadActive = true;
 	printf("[Gspeak] clientThread created\n");
 
-	//Open shared memory struct: clients
-	if (!gs_openMapFile(&hMapFileO, clientName, sizeof(Clients) * PLAYER_MAX))
+	//Open shared memory struct: Shared::clients()
+	/*if (!gs_openMapFile(&hMapFileO, clientName, sizeof(Clients) * PLAYER_MAX))
 	{
 		printf("[Gspeak] openMapFile error\n");
 		return;
 	}
-	clients = (Clients*)MapViewOfFile(hMapFileO, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Clients) * PLAYER_MAX);
-	if (clients == NULL)
+	Shared::clients() = (Clients*)MapViewOfFile(hMapFileO, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Clients) * PLAYER_MAX);
+	if (Shared::clients() == NULL)
 	{
 		gs_criticalError(GetLastError());
 		printf("[Gspeak] could not view file\n");
 		CloseHandle(hMapFileO);
 		hMapFileO = NULL;
 		return;
+	}*/
+
+	HMAP_RESULT result = Shared::openClients();
+	if (result != HMAP_RESULT::SUCCESS)
+	{
+		gs_criticalError(GetLastError());
+		printf("[Gspeak] open clients view failed " + result + '\n');
+		return;
 	}
+
 	printf("[Gspeak] has been loaded successfully\n");
 	ts3Functions.printMessageToCurrentTab("[Gspeak] has been loaded successfully!");
 
@@ -465,19 +485,19 @@ void gs_clientThread(uint64 serverConnectionHandlerID, uint64 channelID)
 	while (!clientThreadBreak)
 	{
 		ts3Functions.getClientID(serverConnectionHandlerID, &clientID);
-		if (clientID != status->clientID)
+		if (clientID != Shared::status()->clientID)
 		{
-			status->clientID = clientID;
-			status->inChannel = true;
+			Shared::status()->clientID = clientID;
+			Shared::status()->inChannel = true;
 		}
 		gs_cmdCheck(serverConnectionHandlerID, clientID);
 
-		forward.x = status->forward[0];
-		forward.y = status->forward[1];
-		forward.z = status->forward[2];
-		upward.x = status->upward[0];
-		upward.y = status->upward[1];
-		upward.z = status->upward[2];
+		forward.x = Shared::status()->forward[0];
+		forward.y = Shared::status()->forward[1];
+		forward.z = Shared::status()->forward[2];
+		upward.x = Shared::status()->upward[0];
+		upward.y = Shared::status()->upward[1];
+		upward.z = Shared::status()->upward[2];
 		ts3Functions.systemset3DListenerAttributes(serverConnectionHandlerID, &zero, &forward, &upward);
 
 		gs_scanClients(serverConnectionHandlerID);
@@ -485,14 +505,15 @@ void gs_clientThread(uint64 serverConnectionHandlerID, uint64 channelID)
 		this_thread::sleep_for(chrono::milliseconds(SCAN_SPEED));
 	}
 
-	UnmapViewOfFile(clients);
+	/*UnmapViewOfFile(Shared::clients());
 	CloseHandle(hMapFileO);
 	hMapFileO = NULL;
-	clients = NULL;
+	Shared::clients() = NULL;*/
+	Shared::closeClients();
 	ts3Functions.printMessageToCurrentTab("[Gspeak] has been shut down!");
 
-	status->clientID = 0;
-	status->inChannel = false;
+	Shared::status()->clientID = 0;
+	Shared::status()->inChannel = false;
 	clientThreadActive = false;
 	printf("[Gspeak] clientThread destroyed\n");
 }
@@ -504,7 +525,7 @@ void gs_statusThread()
 	while (!statusThreadBreak)
 	{
 		//Gmod initialized
-		if (status->tslibV > 0)
+		if (Shared::status()->tslibV > 0)
 		{
 			uint64 serverID = ts3Functions.getCurrentServerConnectionHandlerID();
 			anyID clientID;
@@ -563,17 +584,17 @@ void ts3plugin_onTalkStatusChangeEvent(uint64 serverConnectionHandlerID, int tal
 	if (gs_isMe(serverConnectionHandlerID, clientID))
 	{
 		if (talkStatus == STATUS_TALKING)
-			status->talking = true;
+			Shared::status()->talking = true;
 		else
-			status->talking = false;
+			Shared::status()->talking = false;
 	}
 	else
 	{
-		int index = gs_findClientIndex(clients, clientID);
+		int index = Shared::findClientIndex(clientID);
 		if (index != -1)
 		{
 			if (talkStatus != STATUS_TALKING)
-				clients[index].talking = false;
+				Shared::clients()[index].talking = false;
 		}
 	}
 }
@@ -599,7 +620,7 @@ void voiceEffect_mute(short* samples, int sampleCount, int channels)
 void voiceEffect_radio(short* samples, int sample_it, int channels, float clientVolume)
 {
 	//Downsampling ignore this iteration
-	if ((sample_it / channels) % status->radio_downsampler != 0)
+	if ((sample_it / channels) % Shared::status()->radio_downsampler != 0)
 		return;
 
 	//Noise
@@ -607,11 +628,11 @@ void voiceEffect_radio(short* samples, int sample_it, int channels, float client
 	for (int j = 0; j < channels; j++)
 	{
 		//Distortion
-		short sample_new = (short)((samples[sample_it] > status->radio_distortion ? status->radio_distortion : samples[sample_it] < status->radio_distortion * (-1) ? status->radio_distortion * (-1) : samples[sample_it]) * status->radio_volume * clientVolume);
-		short sample_noise = (short)(sample_new + noise * status->radio_volume_noise);
+		short sample_new = (short)((samples[sample_it] > Shared::status()->radio_distortion ? Shared::status()->radio_distortion : samples[sample_it] < Shared::status()->radio_distortion * (-1) ? Shared::status()->radio_distortion * (-1) : samples[sample_it]) * Shared::status()->radio_volume * clientVolume);
+		short sample_noise = (short)(sample_new + noise * Shared::status()->radio_volume_noise);
 		//Downsampling override future samples
 		bool swap = false;
-		for (int n = 0; n < status->radio_downsampler; n++)
+		for (int n = 0; n < Shared::status()->radio_downsampler; n++)
 		{
 			//i dont get the swapping part
 			int temp_it = sample_it + j + n * channels;
@@ -636,14 +657,14 @@ void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 serverConnectionHandlerID,
 {
 	if (!clientThreadActive)
 		return;
-	int index = gs_findClientIndex(clients, clientID);
+	int index = Shared::findClientIndex(clientID);
 	if (index == -1)
 	{
 		voiceEffect_mute(samples, sampleCount, channels);
 		return;
 	}
 
-	Clients &client = clients[index];
+	Client &client = Shared::clients()[index];
 	//If volume between 0 and 1
 	float clientVolume = min(client.volume_gm, 1.0f);
 	if (clientVolume <= 0)
