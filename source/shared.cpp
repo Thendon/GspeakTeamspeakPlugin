@@ -6,7 +6,7 @@ namespace Gspeak
 	const TCHAR Shared::clientName[] = TEXT("Local\\GMapO");
 	const TCHAR Shared::statusName[] = TEXT("Local\\GMapV");
 
-	HANDLE Shared::hMapFilePlayers = NULL;
+	HANDLE Shared::hMapFileClients = NULL;
 	HANDLE Shared::hMapFileStatus = NULL;
 
 	LPVOID Shared::clientView = NULL;
@@ -48,7 +48,7 @@ namespace Gspeak
 
 	HMAP_RESULT Shared::openClients()
 	{
-		return openOrCreateMap(clientName, &hMapFilePlayers, &clientView, sizeof(Client) * PLAYER_MAX);
+		return openOrCreateMap(clientName, &hMapFileClients, &clientView, sizeof(Client) * PLAYER_MAX);
 	}
 
 	HMAP_RESULT Shared::openOrCreateMap(const TCHAR* name, HANDLE* hMapFile, LPVOID* view, unsigned int buf_size)
@@ -93,9 +93,9 @@ namespace Gspeak
 
 	void Shared::closeClients()
 	{
-		if (hMapFilePlayers == NULL)
+		if (hMapFileClients == NULL)
 			throw std::nullptr_t();
-		closeMap(&hMapFilePlayers, &clientView);
+		closeMap(&hMapFileClients, &clientView);
 	}
 
 	void Shared::closeMap(HANDLE* hMapFile, LPVOID* view)

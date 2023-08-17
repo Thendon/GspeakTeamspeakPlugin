@@ -33,7 +33,7 @@ namespace Gspeak
 		static const TCHAR clientName[];
 		static const TCHAR statusName[];
 
-		static HANDLE hMapFilePlayers;
+		static HANDLE hMapFileClients;
 		static HANDLE hMapFileStatus;
 
 		static LPVOID clientView;

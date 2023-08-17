@@ -4,12 +4,22 @@
 
 namespace Gspeak
 {
+	enum VoiceEffect {
+		None,
+		Radio,
+		Water,
+		Wall,
+		Phone, //unused
+		Helium, //unused
+	};
+
 	struct Client {
 		int clientID;
 		float pos[3];
 		float volume_gm;
 		float volume_ts;
-		bool radio;
+		//bool radio;
+		VoiceEffect effect;
 		bool talking;
 	};
 

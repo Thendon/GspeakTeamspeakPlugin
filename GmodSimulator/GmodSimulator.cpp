@@ -65,6 +65,17 @@ bool validateParameterCount(const std::vector<string>& ins, int required)
     return true;
 }
 
+bool validateParameterCount(const std::vector<string>& ins, int min, int max)
+{
+    if (ins.size() < min || ins.size() > max)
+    {
+        std::cout << "invalid parameter count " << ins.size() << "(" << min << "-" << max << ")" << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
 void sendRadioSettings(const std::vector<string>& ins)
 {
     if (!validateParameterCount(ins, 4))
@@ -75,10 +86,10 @@ void sendRadioSettings(const std::vector<string>& ins)
     float radioVolume = std::stof(ins[2]);
     float radioNoise = std::stof(ins[3]);
 
-    Shared::status()->radio_downsampler = radioDownsampler;
-    Shared::status()->radio_distortion = radioDistortion;
-    Shared::status()->radio_volume = radioVolume;
-    Shared::status()->radio_volume_noise = radioNoise;
+    Shared::status()->radioEffect.downsampler = radioDownsampler;
+    Shared::status()->radioEffect.distortion = radioDistortion;
+    Shared::status()->radioEffect.volume = radioVolume;
+    Shared::status()->radioEffect.noise = radioNoise;
 }
 
 void sendLocalPlayer(const std::vector<string>& ins)
@@ -113,8 +124,7 @@ void sendPlayer(const std::vector<string>& ins)
     float x = std::stof(ins[2]);
     float y = std::stof(ins[3]);
     float z = std::stof(ins[4]);
-    bool isRadio = std::stoi(ins[5]);
-
+    VoiceEffect effect = (VoiceEffect)std::stoi(ins[5]);
 
     int index = Shared::findClientIndex(id);
     bool isNew = index == -1;
@@ -140,13 +150,13 @@ void sendPlayer(const std::vector<string>& ins)
     if (isNew)
     {
         Shared::clients()[index].clientID = id;
-        Shared::clients()[index].radio = isRadio;
     }
 
     Shared::clients()[index].volume_gm = volume;
     Shared::clients()[index].pos[0] = x;
     Shared::clients()[index].pos[1] = z;
     Shared::clients()[index].pos[2] = y;
+    Shared::clients()[index].effect = effect;
 
     std::cout << (isNew ? "added" : "updated") << "(" << index << ") player " << Shared::clients()[index] << std::endl;
 }
@@ -178,14 +188,28 @@ void clearPlayers()
 void forcemove(const std::vector<string>& ins)
 {
     //request password, channelid, channelname here?
-    if (!validateParameterCount(ins, 1))
+    if (!validateParameterCount(ins, 1, 2))
         return;
 
     string password = ins[0];
+    string channelName = ins.size() >= 2 ? ins[1] : "";
 
-    //dont write this into status, maybe add command params
-    strcpy_s(Shared::status()->password, PASS_BUF * sizeof(char), password.c_str());
+    string args = password + ';' + channelName;
+
+    if (args.length() > CMD_ARGS_BUF)
+    {
+        std::cout << "args exceed command args buffer " << args.length() << "/" << CMD_ARGS_BUF << " " << args << std::endl;
+        return;
+    }
+    
     Shared::status()->command = CMD_FORCEMOVE;
+    strcpy_s(Shared::status()->commandArgs, CMD_ARGS_BUF * sizeof(char), args.c_str());
+}
+
+void forcekick()
+{
+    Shared::status()->command = CMD_FORCEKICK;
+    strcpy_s(Shared::status()->commandArgs, CMD_ARGS_BUF * sizeof(char), "");
 }
 
 void rename(const std::vector<string>& ins)
@@ -195,9 +219,10 @@ void rename(const std::vector<string>& ins)
 
     string name = ins[0];
 
-    //dont write this into status, maybe add command params
-    strcpy_s(Shared::status()->name, NAME_BUF * sizeof(char), name.c_str());
+    string args = name;
+
     Shared::status()->command = CMD_RENAME;
+    strcpy_s(Shared::status()->commandArgs, CMD_ARGS_BUF * sizeof(char), args.c_str());
 }
 
 void printStatus()
@@ -236,6 +261,8 @@ void handleInput(const string& cmd, const std::vector<string>& ins)
         sendRadioSettings(ins);
     else if (cmd == "connect")
         forcemove(ins);
+    else if (cmd == "kick")
+        forcekick();
     else if (cmd == "rename")
         rename(ins);
     else if (cmd == "send")

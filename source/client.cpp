@@ -8,7 +8,7 @@ namespace Gspeak
 			", pos = " << arg.pos[0] << ' ' << arg.pos[0] << ' ' << arg.pos[0] <<
 			", volume_gm = " << arg.volume_gm <<
 			", volume_ts = " << arg.volume_ts <<
-			", radio = " << arg.radio <<
+			", effect = " << arg.effect <<
 			", talking = " << arg.talking;
 		return os;
 	}

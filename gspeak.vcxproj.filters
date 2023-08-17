@@ -21,13 +21,13 @@
     <ClInclude Include="source\shared.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="client.h">
+    <ClInclude Include="source\client.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="status.h">
+    <ClInclude Include="source\defines.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="defines.h">
+    <ClInclude Include="source\status.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>
@@ -38,10 +38,10 @@
     <ClCompile Include="source\shared.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="client.cpp">
+    <ClCompile Include="source\status.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="status.cpp">
+    <ClCompile Include="source\client.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>

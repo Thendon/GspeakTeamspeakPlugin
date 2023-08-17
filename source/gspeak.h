@@ -1,6 +1,5 @@
 
-#ifndef GSPEAK_H
-#define GSPEAK_H
+#pragma once
 
 #ifdef WIN32
 #define PLUGINS_EXPORTDLL __declspec(dllexport)
@@ -8,21 +7,8 @@
 #define PLUGINS_EXPORTDLL __attribute__ ((visibility("default")))
 #endif
 
-//#define NAME_BUF 32
-//#define PASS_BUF 32
-//#define PLAYER_MAX 64
-//
-//#define CMD_RENAME 1
-//#define CMD_FORCEMOVE 2
-
-struct Client {
-	short clientID;
-	float pos[3];
-	float volume_gm;
-	float volume_ts;
-	bool radio;
-	bool talking;
-};
+#include <vector>
+#include <string>
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,7 +25,7 @@ extern "C" {
 
 	PLUGINS_EXPORTDLL void gs_initClients(uint64 serverConnectionHandlerID, uint64 channelID);
 	PLUGINS_EXPORTDLL void gs_initStatus();
-	PLUGINS_EXPORTDLL void gs_setStatusName(uint64 serverConnectionHandlerID, anyID clientID, char* clientName);
+	PLUGINS_EXPORTDLL void gs_updateStatusName(uint64 serverConnectionHandlerID, anyID clientID, char* clientName = NULL);
 	PLUGINS_EXPORTDLL void gs_shutClients();
 	PLUGINS_EXPORTDLL void gs_shutStatus();
 	PLUGINS_EXPORTDLL void gs_setIdle();
@@ -48,15 +34,16 @@ extern "C" {
 	PLUGINS_EXPORTDLL bool gs_isMe(uint64 serverConnectionHandlerID, anyID clientID);
 	PLUGINS_EXPORTDLL void gs_criticalError(int errorCode);
 	PLUGINS_EXPORTDLL bool gs_openMapFile(HANDLE* hMapFile, TCHAR* name, unsigned int buf_size);
-	PLUGINS_EXPORTDLL bool gs_searchChannel(uint64 serverConnectionHandlerID, anyID clientID);
 	PLUGINS_EXPORTDLL void gs_clientMoved(uint64 serverConnectionHandlerID, anyID clientID, uint64 channelID);
-	PLUGINS_EXPORTDLL bool gs_isChannel(uint64 serverConnectionHandlerID, uint64 channelID);
+	PLUGINS_EXPORTDLL bool gs_isDefaultChannel(uint64 serverConnectionHandlerID, uint64 channelID);
+	PLUGINS_EXPORTDLL bool gs_isGspeakChannel(uint64 serverConnectionHandlerID, uint64 channelID);
 	PLUGINS_EXPORTDLL void gs_scanClients(uint64 serverConnectionHandlerID);
 	PLUGINS_EXPORTDLL void gs_clientThread(uint64 serverConnectionHandlerID, uint64 channelID);
 	PLUGINS_EXPORTDLL void gs_statusThread();
 	PLUGINS_EXPORTDLL void gs_cmdCheck(uint64 serverConnectionHandlerID, anyID clientID);
-	PLUGINS_EXPORTDLL bool gs_nameCheck(uint64 serverConnectionHandlerID, anyID clientID);
-	//PLUGINS_EXPORTDLL bool gs_findClientIndex(anyID clientID, int& clientIndex);
+	PLUGINS_EXPORTDLL bool gs_setNameCommand(uint64 serverConnectionHandlerID, anyID clientID, const std::vector<std::string>& args);
+	PLUGINS_EXPORTDLL bool gs_moveChannelCommand(uint64 serverConnectionHandlerID, anyID clientID, const std::vector<std::string>& args);
+	PLUGINS_EXPORTDLL bool gs_moveDefaultChannel(uint64 serverConnectionHandlerID, anyID clientID);
 
 	PLUGINS_EXPORTDLL void ts3plugin_onClientMoveEvent(uint64 serverConnectionHandlerID, anyID clientID, uint64 oldChannelID, uint64 newChannelID, int visibility, const char* moveMessage);
 	PLUGINS_EXPORTDLL void ts3plugin_onClientMoveMovedEvent(uint64 serverConnectionHandlerID, anyID clientID, uint64 oldChannelID, uint64 newChannelID, int visibility, anyID moverID, const char* moverName, const char* moverUniqueIdentifier, const char* moveMessage);
@@ -68,6 +55,4 @@ extern "C" {
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif
