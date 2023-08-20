@@ -125,36 +125,18 @@ int ts3plugin_init()
 {
 	std::cout << "[Gspeak] init" << std::endl;
 
-	//Open shared memory struct: Shared::status()
-	
-
-	//if (!gs_openMapFile(&hMapFileV, statusName, sizeof(Status)))
-	//{
-	//	return 1;
-	//}
-	////Shared::status() = (Status*)malloc(sizeof(Status));
-	//Shared::status() = (Status*)MapViewOfFile(hMapFileV, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Status));
-	//if (Shared::status() == NULL)
-	//{
-	//	gs_criticalError(GetLastError());
-	//	std::cout <<  "[Gspeak] could not view file" << std::endl;
-	//	CloseHandle(hMapFileV);
-	//	hMapFileV = NULL;
-	//	return 1;
-	//}
-
 	HMAP_RESULT result = Shared::openStatus();
 
 	if (result != HMAP_RESULT::SUCCESS)
 	{
 		int err = GetLastError();
 		gs_criticalError(err);
-		std::cout << "[Gspeak] open status map failed " << result << std::endl;
+		std::cout << "[Gspeak] open status map failed " << (int)result << std::endl;
 		return 1;
 	}
 
 	Shared::status()->gspeakV = GSPEAK_VERSION;
-	Shared::status()->command = 0;
+	Shared::status()->command = Command::Clear;
 	Shared::status()->clientID = 0;
 	Shared::status()->inChannel = false;
 
@@ -248,10 +230,6 @@ void gs_shutdown()
 	{
 		if (!clientThreadActive && !statusThreadActive)
 		{
-			/*UnmapViewOfFile(Shared::status());
-			CloseHandle(hMapFileV);
-			hMapFileV = NULL;
-			Shared::status() = NULL;*/
 			Shared::closeStatus();
 			break;
 		}
@@ -386,20 +364,6 @@ void gs_scanClients(uint64 serverConnectionHandlerID)
 	}
 }
 
-//std::vector<const char*> split(const char* in, const char* delimiter)
-//{
-//	std::vector<const char*> out;
-//	char* next_token = NULL;
-//	// Pointer to point the word returned by the strtok() function.
-//	char* p = strtok_s((char*)in, delimiter, &next_token);
-//	while (p != NULL) {
-//		out.push_back(p);
-//		p = strtok_s(NULL, delimiter, &next_token);
-//	}
-//
-//	return out;
-//}
-
 void split(std::string str, char seperator, std::vector<std::string>& strings)
 {
 	int i = 0;
@@ -442,7 +406,7 @@ bool validateParameterCount(const std::vector<std::string>& ins, int required)
 
 void gs_cmdCheck(uint64 serverConnectionHandlerID, anyID clientID)
 {
-	if (Shared::status()->command <= 0)
+	if (Shared::status()->command <= Command::Clear)
 		return;
 
 	bool success = false;
@@ -452,13 +416,13 @@ void gs_cmdCheck(uint64 serverConnectionHandlerID, anyID clientID)
 
 	switch (Shared::status()->command)
 	{
-	case CMD_RENAME:
+	case Command::Rename:
 		success = gs_setNameCommand(serverConnectionHandlerID, clientID, args);
 		break;
-	case CMD_FORCEMOVE:
+	case Command::ForceMove:
 		success = gs_moveChannelCommand(serverConnectionHandlerID, clientID, args);
 		break;
-	case CMD_FORCEKICK:
+	case Command::ForceKick:
 		success = gs_moveDefaultChannel(serverConnectionHandlerID, clientID);
 		break;
 	//case 123:
@@ -467,7 +431,7 @@ void gs_cmdCheck(uint64 serverConnectionHandlerID, anyID clientID)
 		//break;
 	}
 
-	Shared::status()->command = success ? -1 : -2;
+	Shared::status()->command = success ? Command::Success : Command::Failure;
 }
 
 /*
@@ -569,6 +533,7 @@ bool gs_moveChannelCommand(uint64 serverConnectionHandlerID, anyID clientID, con
 	return false;
 }
 
+//just to refresh current name in status struct to the actual name in teamspeak
 void gs_updateStatusName(uint64 serverConnectionHandlerID, anyID clientID, char* clientName)
 {
 	if (!gs_isMe(serverConnectionHandlerID, clientID))
@@ -589,7 +554,7 @@ void gs_clientThread(uint64 serverConnectionHandlerID, uint64 channelID)
 	if (result != HMAP_RESULT::SUCCESS)
 	{
 		gs_criticalError(GetLastError());
-		std::cout << "[Gspeak] open clients view failed " << result << std::endl;
+		std::cout << "[Gspeak] open clients view failed " << (int)result << std::endl;
 		return;
 	}
 
@@ -630,10 +595,6 @@ void gs_clientThread(uint64 serverConnectionHandlerID, uint64 channelID)
 		this_thread::sleep_for(chrono::milliseconds(SCAN_SPEED));
 	}
 
-	/*UnmapViewOfFile(Shared::clients());
-	CloseHandle(hMapFileO);
-	hMapFileO = NULL;
-	Shared::clients() = NULL;*/
 	Shared::closeClients();
 	ts3Functions.printMessageToCurrentTab("[Gspeak] has been shut down!");
 
@@ -790,43 +751,6 @@ void voiceEffect_radio(short* samples, int sampleCount, int channels, float clie
 	}
 }
 
-//resofreq = pole frequency
-//amp = magnitude at pole frequency(approx)
-void filter_lowPass(short* samples, int sampleCount, int channel, int channels, float resofreq = 5000.0f, float amp = 1.0f)
-{
-	double w = 2.0 * M_PI * resofreq / gspeakChannelSampleRate; // Pole angle
-	double q = 1.0 - w / (2.0 * (amp + 0.5 / (1.0 + w)) + w - 2.0); // Pole magnitude
-	double r = q * q;
-	double c = r + 1.0 - 2.0 * cos(w) * q;
-	double vibrapos = 0;
-	double vibraspeed = 0;
-
-	/* Main loop */
-	for (int sample = 0; sample < sampleCount; sample++)
-	{
-		int sampleIndex = sample * channels + channel;
-
-		/* Accelerate vibra by signal-vibra, multiplied by lowpasscutoff */
-		vibraspeed += ((double)samples[sampleIndex] - vibrapos) * c;
-
-		/* Add velocity to vibra's position */
-		vibrapos += vibraspeed;
-
-		/* Attenuate/amplify vibra's velocity by resonance */
-		vibraspeed *= r;
-
-		/* Check clipping */
-		short temp = (short)max(min(32767, vibrapos), -32768);
-		/*if (temp > 32767)
-			temp = 32767;
-		else if (temp < -32768) 
-			temp = -32768;*/
-
-		/* Store new value */
-		samples[sampleIndex] = temp;
-	}
-}
-
 /* - Three one-poles combined in parallel
  * - Output stays within input limits
  * - 18 dB/oct (approx) frequency response rolloff
@@ -894,7 +818,7 @@ void voiceEffect_water(short* samples, int sampleCount, int channels)
 {
 	for (int channel = 0; channel < channels; channel++)
 	{
-		filter_lowPass(samples, sampleCount, channel, channels, 5000.0f, 1.0f);
+		filter_lowPass2(samples, sampleCount, channel, channels);
 	}
 }
 
@@ -960,16 +884,16 @@ void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 serverConnectionHandlerID,
 
 	switch (client.effect)
 	{
-	case Radio:
+	case VoiceEffect::Radio:
 		voiceEffect_radio(samples, sampleCount, channels, clientVolume);
 		break;
-	case Water:
+	case VoiceEffect::Water:
 		voiceEffect_water(samples, sampleCount, channels);
 		break;
-	case Wall:
+	case VoiceEffect::Wall:
 		voiceEffect_wall(samples, sampleCount, channels);
 		break;
-	/*case None:
+	/*case VoiceEffect::None:
 	default:
 		break;*/
 	};

@@ -202,13 +202,13 @@ void forcemove(const std::vector<string>& ins)
         return;
     }
     
-    Shared::status()->command = CMD_FORCEMOVE;
+    Shared::status()->command = Command::ForceMove;
     strcpy_s(Shared::status()->commandArgs, CMD_ARGS_BUF * sizeof(char), args.c_str());
 }
 
 void forcekick()
 {
-    Shared::status()->command = CMD_FORCEKICK;
+    Shared::status()->command = Command::ForceKick;
     strcpy_s(Shared::status()->commandArgs, CMD_ARGS_BUF * sizeof(char), "");
 }
 
@@ -221,7 +221,7 @@ void rename(const std::vector<string>& ins)
 
     string args = name;
 
-    Shared::status()->command = CMD_RENAME;
+    Shared::status()->command = Command::Rename;
     strcpy_s(Shared::status()->commandArgs, CMD_ARGS_BUF * sizeof(char), args.c_str());
 }
 
@@ -282,7 +282,7 @@ int main()
     HMAP_RESULT result = Shared::openStatus();
     if (result != HMAP_RESULT::SUCCESS)
     {
-        std::cout << "status map error " << result << std::endl;
+        std::cout << "status map error " << (int)result << std::endl;
         return 1;
     }
 

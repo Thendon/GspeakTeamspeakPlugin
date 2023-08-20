@@ -72,7 +72,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <TargetName>gspeak_win64</TargetName>
-    <OutDir>C:\Users\COCOS Technologies\AppData\Roaming\TS3Client\plugins</OutDir>
+    <OutDir>$(SolutionDir)bin\$(Configuration)\$(Platform)\Gspeak\</OutDir>
     <IntDir>bin\$(Configuration)\$(Platform)</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
