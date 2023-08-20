@@ -18,27 +18,27 @@
     <ClCompile Include="GmodSimulator.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="..\source\shared.cpp">
+    <ClCompile Include="..\source\shared\client.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="..\source\client.cpp">
+    <ClCompile Include="..\source\shared\shared.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="..\source\status.cpp">
+    <ClCompile Include="..\source\shared\status.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\source\shared.h">
+    <ClInclude Include="..\source\shared\client.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\client.h">
+    <ClInclude Include="..\source\shared\defines.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\defines.h">
+    <ClInclude Include="..\source\shared\shared.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\status.h">
+    <ClInclude Include="..\source\shared\status.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>

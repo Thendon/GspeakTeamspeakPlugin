@@ -129,16 +129,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\source\client.cpp" />
-    <ClCompile Include="..\source\shared.cpp" />
-    <ClCompile Include="..\source\status.cpp" />
+    <ClCompile Include="..\source\shared\client.cpp" />
+    <ClCompile Include="..\source\shared\shared.cpp" />
+    <ClCompile Include="..\source\shared\status.cpp" />
     <ClCompile Include="GmodSimulator.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\source\client.h" />
-    <ClInclude Include="..\source\defines.h" />
-    <ClInclude Include="..\source\shared.h" />
-    <ClInclude Include="..\source\status.h" />
+    <ClInclude Include="..\source\shared\client.h" />
+    <ClInclude Include="..\source\shared\defines.h" />
+    <ClInclude Include="..\source\shared\shared.h" />
+    <ClInclude Include="..\source\shared\status.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

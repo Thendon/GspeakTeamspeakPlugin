@@ -1,6 +1,6 @@
 #define THREAD_DELAY 100
 
-#include "../source/shared.h"
+#include "../source/shared/shared.h"
 #include <thread>
 #include <Windows.h>
 #include <iostream>
