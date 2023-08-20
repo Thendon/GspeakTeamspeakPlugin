@@ -92,6 +92,18 @@ void sendRadioSettings(const std::vector<string>& ins)
     Shared::status()->radioEffect.noise = radioNoise;
 }
 
+void sendWaterSettings(const std::vector<string>& ins)
+{
+    if (!validateParameterCount(ins, 2))
+        return;
+
+    double smoothness = std::stod(ins[0]);
+    double scale = std::stod(ins[1]);
+
+    Shared::status()->waterEffect.smooth = smoothness;
+    Shared::status()->waterEffect.scale = scale;
+}
+
 void sendLocalPlayer(const std::vector<string>& ins)
 {
     if (!validateParameterCount(ins, 6))
@@ -259,6 +271,8 @@ void handleInput(const string& cmd, const std::vector<string>& ins)
         printPlayers();
     else if (cmd == "rsettings")
         sendRadioSettings(ins);
+    else if (cmd == "wsettings")
+        sendWaterSettings(ins);
     else if (cmd == "connect")
         forcemove(ins);
     else if (cmd == "kick")

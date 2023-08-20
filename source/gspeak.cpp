@@ -146,6 +146,12 @@ int ts3plugin_init()
 	Shared::status()->radioEffect.volume = 1.5f;
 	Shared::status()->radioEffect.noise = 0.01f;
 
+	Shared::status()->waterEffect.scale = 100.0;
+	Shared::status()->waterEffect.smooth = 0.999;
+
+	Shared::status()->wallEffect.smooth = 0.999;
+
+
 	//Check for Gspeak Channel
 	uint64 serverID = ts3Functions.getCurrentServerConnectionHandlerID();
 	anyID clientID;
@@ -700,13 +706,10 @@ void voiceEffect_mute(short* samples, int sampleCount, int channels)
 	for (int i = 0; i < sampleCount * channels; i++)
 	{
 		samples[i] = 0;
-		/*short sample_it = i * channels;
-		for (int j = 0; j < channels; j++)
-			samples[sample_it + j] = 0;*/
 	}
 }
 
-void voiceEffect_radio(short* samples, int sampleCount, int channels, float clientVolume)
+void voiceEffect_radio(short* samples, int sampleCount, int channels)
 {
 	for (int i = 0; i < sampleCount; i++)
 	{
@@ -721,9 +724,6 @@ void voiceEffect_radio(short* samples, int sampleCount, int channels, float clie
 		for (int j = 0; j < channels; j++)
 		{
 			//Distortion
-			/*short sample_new = (short)((samples[sample_it] > Shared::status()->radioEffect.distortion ? Shared::status()->radioEffect.distortion :
-										samples[sample_it] < Shared::status()->radioEffect.distortion * (-1) ? Shared::status()->radioEffect.distortion * (-1) : samples[sample_it])
-										* Shared::status()->radioEffect.volume * clientVolume);*/
 
 			short sample_new;
 			//Apply caps
@@ -761,50 +761,41 @@ void voiceEffect_radio(short* samples, int sampleCount, int channels, float clie
  */
 
 //in ein array prop channel
-double areg = 0;
-double breg = 0;
-double creg = 0;
+double areg[10];// = 0;
+double breg[10];// = 0;
+double creg[10];// = 0;
 
-void filter_lowPass2(short* samples, int sampleCount, int channel, int channels, float scale = 100.0f, float smoothness = 0.999f)
+// Number of samples from start of edge to halfway to new value
+// 0 < Smoothness < 1. High is better, but may cause precision problems
+void filter_lowPass(short* samples, int sampleCount, int channel, int channels, double scale = 100.0, double smoothness = 0.999)
 {
-	/* Parameters */
-	// Number of samples from start of edge to halfway to new value
-	//const double        scale = 100;
-	// 0 < Smoothness < 1. High is better, but may cause precision problems
-	//const double        smoothness = 0.999;
-
 	/* Precalc variables */
-	double a = 1.0 - (2.4 / scale); // Could also be set directly
-	double b = (double)smoothness;      //         -"-
+	double a = 1.0 - (2.4 / scale);
+	double b = (double)smoothness;
 	double acoef = a;
 	double bcoef = a * b;
 	double ccoef = a * b * b;
-	double mastergain = 1.0 / (-1.0 / (log(a) + 2.0 * log(b)) + 2.0 /
-		(log(a) + log(b)) - 1.0 / log(a));
-	double again = mastergain;
-	double bgain = mastergain * (log(a * b * b) * (log(a) - log(a * b)) /
-		((log(a * b * b) - log(a * b)) * log(a * b))
-		- log(a) / log(a * b));
-	double cgain = mastergain * (-(log(a) - log(a * b)) /
-		(log(a * b * b) - log(a * b)));
 
-	/* Runtime variables */
-	long sample;
+	double gain = 1.0 / (-1.0 / log(a) + 2.0 / log(a * b) - 1.0 / log(a * b * b));
+
+	double again = gain;
+	double bgain = -2.0 * gain;
+	double cgain = gain;
 
 	/* Main loop */
-	for (sample = 0; sample < sampleCount; sample++)
+	for (long sample = 0; sample < sampleCount; sample++)
 	{
 		int sampleIndex = sample * channels + channel;
 
 		/* Update filters */
-		areg = acoef * areg + samples[sampleIndex];
-		breg = bcoef * breg + samples[sampleIndex];
-		creg = ccoef * creg + samples[sampleIndex];
+		areg[channel] = acoef * areg[channel] + samples[sampleIndex];
+		breg[channel] = bcoef * breg[channel] + samples[sampleIndex];
+		creg[channel] = ccoef * creg[channel] + samples[sampleIndex];
 
 		/* Combine filters in parallel */
-		long temp = (long)(again * areg
-						 + bgain * breg
-						 + cgain * creg);
+		long temp = (long)(again * areg[channel]
+						 + bgain * breg[channel]
+						 + cgain * creg[channel]);
 
 		/* Check clipping */
 		short temp2 = (short)max(min(32767, temp), -32768);
@@ -818,7 +809,7 @@ void voiceEffect_water(short* samples, int sampleCount, int channels)
 {
 	for (int channel = 0; channel < channels; channel++)
 	{
-		filter_lowPass2(samples, sampleCount, channel, channels);
+		filter_lowPass(samples, sampleCount, channel, channels, Shared::status()->waterEffect.scale, Shared::status()->waterEffect.smooth);
 	}
 }
 
@@ -826,7 +817,7 @@ void voiceEffect_wall(short* samples, int sampleCount, int channels)
 {
 	for (int channel = 0; channel < channels; channel++)
 	{
-		filter_lowPass2(samples, sampleCount, channel, channels);
+		filter_lowPass(samples, sampleCount, channel, channels, 50.0, 0.5);
 	}
 }
 
@@ -863,21 +854,13 @@ void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 serverConnectionHandlerID,
 	if (client.talking != true)
 		client.talking = true;
 
+	//move this to volume effect?
 	float totalSampleVolume = 0;
 	for (int i = 0; i < sampleCount; i++)
 	{
 		unsigned short sample_it = i * channels;
 		//Average volume detection for mouth move animation (one channel should be enough)
 		totalSampleVolume += min(abs(samples[sample_it]), (short)VOLUME_MAX);
-
-		/*if (client.radio)
-		{
-			voiceEffect_radio(samples, sample_it, channels, clientVolume);
-		}
-		else
-		{
-			voiceEffect_normal(samples, sample_it, channels, clientVolume);
-		}*/
 	}
 	//Sending average volume to Gmod
 	client.volume_ts = totalSampleVolume / sampleCount / VOLUME_MAX;
@@ -885,7 +868,7 @@ void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 serverConnectionHandlerID,
 	switch (client.effect)
 	{
 	case VoiceEffect::Radio:
-		voiceEffect_radio(samples, sampleCount, channels, clientVolume);
+		voiceEffect_radio(samples, sampleCount, channels);
 		break;
 	case VoiceEffect::Water:
 		voiceEffect_water(samples, sampleCount, channels);
