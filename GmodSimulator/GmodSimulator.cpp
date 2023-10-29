@@ -94,14 +94,30 @@ void sendRadioSettings(const std::vector<string>& ins)
 
 void sendWaterSettings(const std::vector<string>& ins)
 {
-    if (!validateParameterCount(ins, 2))
+    if (!validateParameterCount(ins, 3))
         return;
 
-    double smoothness = std::stod(ins[0]);
-    double scale = std::stod(ins[1]);
+    double scale = std::stod(ins[0]);
+    double smoothness = std::stod(ins[1]);
+    float boost = std::stof(ins[2]);
 
-    Shared::status()->waterEffect.smooth = smoothness;
     Shared::status()->waterEffect.scale = scale;
+    Shared::status()->waterEffect.smooth = smoothness;
+    Shared::status()->waterEffect.boost = boost;
+}
+
+void sendWallSettings(const std::vector<string>& ins)
+{
+    if (!validateParameterCount(ins, 3))
+        return;
+
+    double scale = std::stod(ins[0]);
+    double smoothness = std::stod(ins[1]);
+    float boost = std::stof(ins[2]);
+
+    Shared::status()->waterEffect.scale = scale;
+    Shared::status()->waterEffect.smooth = smoothness;
+    Shared::status()->waterEffect.boost = boost;
 }
 
 void sendLocalPlayer(const std::vector<string>& ins)
@@ -271,8 +287,10 @@ void handleInput(const string& cmd, const std::vector<string>& ins)
         printPlayers();
     else if (cmd == "rsettings")
         sendRadioSettings(ins);
-    else if (cmd == "wsettings")
+    else if (cmd == "usettings")
         sendWaterSettings(ins);
+    else if (cmd == "wsettings")
+        sendWallSettings(ins);
     else if (cmd == "connect")
         forcemove(ins);
     else if (cmd == "kick")

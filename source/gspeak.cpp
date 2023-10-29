@@ -15,6 +15,7 @@
 #include "shared.h"
 #include <list>
 #include <iostream>
+#include <map>
 
 static struct TS3Functions ts3Functions;
 
@@ -34,7 +35,7 @@ static struct TS3Functions ts3Functions;
 #define RETURNCODE_BUFSIZE 128
 #define CHANNELNAME_BUFSIZE 128
 
-#define GSPEAK_VERSION 3000
+#define GSPEAK_VERSION 3100
 #define SCAN_SPEED 100
 #define VOLUME_MAX 1800
 #define SHORT_SIZE 32767
@@ -74,6 +75,63 @@ SampleRate gspeakChannelSampleRate = SampleRate::_48kHz;
 using namespace std;
 using namespace Gspeak;
 
+class ClientEffectData
+{
+public:
+	VoiceEffect currentEffect = VoiceEffect::None;
+
+	int lowpass_channels = 0;
+	double* lowpass_areg;
+	double* lowpass_breg;
+	double* lowpass_creg;
+
+	void initLowpass(int channels)
+	{
+		lowpass_areg = new double[channels];
+		lowpass_breg = new double[channels];
+		lowpass_creg = new double[channels];
+
+		lowpass_channels = channels;
+	}
+
+	void changeEffect(VoiceEffect effect)
+	{
+		currentEffect = effect;
+	}
+
+	void resetLowpass()
+	{
+		for (int i = 0; i < lowpass_channels; i++)
+		{
+			lowpass_areg[i] = 0;
+			lowpass_breg[i] = 0;
+			lowpass_creg[i] = 0;
+		}
+	}
+
+	~ClientEffectData()
+	{
+		delete[] lowpass_areg;
+		delete[] lowpass_breg;
+		delete[] lowpass_creg;
+	}
+};
+
+std::map<anyID, ClientEffectData> clientEffectMap;
+
+ClientEffectData& GetClientEffectData(anyID clientID)
+{
+	return clientEffectMap[clientID];
+}
+
+void FreeClientEffectData(anyID clientID)
+{
+	if (clientEffectMap.find(clientID) == clientEffectMap.end())
+		return;
+
+	clientEffectMap.erase(clientID);
+}
+
 //*************************************
 // REQUIRED TEAMSPEAK3 FUNCTIONS
 //*************************************
@@ -98,7 +156,7 @@ const char* ts3plugin_name()
 
 const char* ts3plugin_version()
 {
-	return "3.0";
+	return "3.1";
 }
 
 int ts3plugin_apiVersion()
@@ -141,16 +199,28 @@ int ts3plugin_init()
 	Shared::status()->inChannel = false;
 
 	//check if those will be overriden when starting gmod before activating the addon
-	Shared::status()->radioEffect.downsampler = 4;
-	Shared::status()->radioEffect.distortion = 1500;
-	Shared::status()->radioEffect.volume = 1.5f;
-	Shared::status()->radioEffect.noise = 0.01f;
+	//todo proper init when created
+	if (Shared::status()->radioEffect.downsampler == 0)
+	{
+		Shared::status()->radioEffect.downsampler = 4;
+		Shared::status()->radioEffect.distortion = 1500;
+		Shared::status()->radioEffect.volume = 1.5f;
+		Shared::status()->radioEffect.noise = 0.01f;
+	}
 
-	Shared::status()->waterEffect.scale = 100.0;
-	Shared::status()->waterEffect.smooth = 0.999;
+	if (Shared::status()->waterEffect.scale == 0)
+	{
+		Shared::status()->waterEffect.scale = 100.0;
+		Shared::status()->waterEffect.smooth = 0.999;
+		Shared::status()->waterEffect.boost = 1.0f;
+	}
 
-	Shared::status()->wallEffect.smooth = 0.999;
-
+	if (Shared::status()->wallEffect.scale == 0)
+	{
+		Shared::status()->wallEffect.scale = 50.0;
+		Shared::status()->wallEffect.smooth = 0.5;
+		Shared::status()->wallEffect.boost = 1.0f;
+	}
 
 	//Check for Gspeak Channel
 	uint64 serverID = ts3Functions.getCurrentServerConnectionHandlerID();
@@ -232,6 +302,7 @@ void gs_shutdown()
 		gs_shutClients();
 	if (statusThreadActive)
 		gs_shutStatus();
+
 	while (true)
 	{
 		if (!clientThreadActive && !statusThreadActive)
@@ -307,24 +378,40 @@ bool gs_getSampleRate(uint64 serverConnectionHandlerID, uint64 channelID, Sample
 	}
 }
 
+void gs_localClientMoved(uint64 serverConnectionHandlerID, anyID clientID, uint64 channelID)
+{
+	uint64 localChannelID;
+	if (ts3Functions.getChannelOfClient(serverConnectionHandlerID, clientID, &localChannelID) != ERROR_ok)
+		return;
+	if (localChannelID == 0 || channelID == 0)
+		return; //Leaving Server or closing Teamspeak
+
+	if (gs_isGspeakChannel(serverConnectionHandlerID, channelID))
+		gs_setActive(serverConnectionHandlerID, channelID);
+	else if (clientThreadActive)
+		gs_setIdle();
+}
+
+void gs_otherClientMoved(uint64 serverConnectionHandlerID, anyID clientID, uint64 channelID)
+{
+	uint64 localChannelID;
+	if (ts3Functions.getChannelOfClient(serverConnectionHandlerID, clientID, &localChannelID) != ERROR_ok)
+		return;
+	if (channelID == localChannelID)
+		return;
+
+	FreeClientEffectData(clientID);
+}
+
 void gs_clientMoved(uint64 serverConnectionHandlerID, anyID clientID, uint64 channelID)
 {
 	anyID localClientID;
 	if (ts3Functions.getClientID(serverConnectionHandlerID, &localClientID) != ERROR_ok)
 		return;
-	uint64 localChannelID;
-	if (ts3Functions.getChannelOfClient(serverConnectionHandlerID, localClientID, &localChannelID) != ERROR_ok)
-		return;
-	if (localChannelID == 0 || channelID == 0)
-		return; //Leaving Server or closing Teamspeak
-
 	if (localClientID == clientID)
-	{
-		if (gs_isGspeakChannel(serverConnectionHandlerID, channelID))
-			gs_setActive(serverConnectionHandlerID, channelID);
-		else if (clientThreadActive)
-			gs_setIdle();
-	}
+		gs_localClientMoved(serverConnectionHandlerID, clientID, channelID);
+	else if (clientThreadActive)
+		gs_otherClientMoved(serverConnectionHandlerID, clientID, channelID);
 }
 
 bool gs_isDefaultChannel(uint64 serverConnectionHandlerID, uint64 channelID)
@@ -338,9 +425,6 @@ bool gs_isDefaultChannel(uint64 serverConnectionHandlerID, uint64 channelID)
 
 bool gs_isGspeakChannel(uint64 serverConnectionHandlerID, uint64 channelID)
 {
-	/*if (channelID == Shared::status()->channelId)
-		return true;*/
-
 	char* chname;
 	if (ts3Functions.getChannelVariableAsString(serverConnectionHandlerID, channelID, CHANNEL_NAME, &chname) != ERROR_ok)
 		return false;
@@ -528,8 +612,6 @@ bool gs_moveChannelCommand(uint64 serverConnectionHandlerID, anyID clientID, con
 
 		if (gs_isGspeakChannel(serverConnectionHandlerID, channels[i]))
 		{
-			//if (ts3Functions.requestClientMove(serverConnectionHandlerID, clientID, channels[i], Shared::status()->password, NULL) == ERROR_ok)
-
 			//if we didnt succeed in joining the found channel, something is wrong (e.g server config, wrong server) and we should stop trying anyways
 			ts3Functions.requestClientMove(serverConnectionHandlerID, clientID, channels[i], password, NULL);
 			return true;
@@ -577,6 +659,8 @@ void gs_clientThread(uint64 serverConnectionHandlerID, uint64 channelID)
 	if (!gs_getSampleRate(serverConnectionHandlerID, channelID, &gspeakChannelSampleRate))
 		std::cout << "[Gspeak] requesting sample rate failed" << std::endl;
 	std::cout << "[Gspeak] using sample rate " << gspeakChannelSampleRate << std::endl;
+
+	ts3Functions.systemset3DSettings(serverConnectionHandlerID, 1.0f, 1.0f);
 
 	while (!clientThreadBreak)
 	{
@@ -761,16 +845,12 @@ void voiceEffect_radio(short* samples, int sampleCount, int channels)
  */
 
 //in ein array prop channel
-double areg[10];// = 0;
-double breg[10];// = 0;
-double creg[10];// = 0;
-
-// Number of samples from start of edge to halfway to new value
-// 0 < Smoothness < 1. High is better, but may cause precision problems
-void filter_lowPass(short* samples, int sampleCount, int channel, int channels, double scale = 100.0, double smoothness = 0.999)
+void filter_lowPass(ClientEffectData& effectData, short* samples, int sampleCount, int channel, int channels, double scale = 100.0, double smoothness = 0.999)
 {
 	/* Precalc variables */
+	// Number of samples from start of edge to halfway to new value
 	double a = 1.0 - (2.4 / scale);
+	// 0 < Smoothness < 1. High is better, but may cause precision problems
 	double b = (double)smoothness;
 	double acoef = a;
 	double bcoef = a * b;
@@ -788,14 +868,14 @@ void filter_lowPass(short* samples, int sampleCount, int channel, int channels, 
 		int sampleIndex = sample * channels + channel;
 
 		/* Update filters */
-		areg[channel] = acoef * areg[channel] + samples[sampleIndex];
-		breg[channel] = bcoef * breg[channel] + samples[sampleIndex];
-		creg[channel] = ccoef * creg[channel] + samples[sampleIndex];
+		effectData.lowpass_areg[channel] = acoef * effectData.lowpass_areg[channel] + samples[sampleIndex];
+		effectData.lowpass_breg[channel] = bcoef * effectData.lowpass_breg[channel] + samples[sampleIndex];
+		effectData.lowpass_creg[channel] = ccoef * effectData.lowpass_creg[channel] + samples[sampleIndex];
 
 		/* Combine filters in parallel */
-		long temp = (long)(again * areg[channel]
-						 + bgain * breg[channel]
-						 + cgain * creg[channel]);
+		long temp = (long)(again * effectData.lowpass_areg[channel]
+						 + bgain * effectData.lowpass_breg[channel]
+						 + cgain * effectData.lowpass_creg[channel]);
 
 		/* Check clipping */
 		short temp2 = (short)max(min(32767, temp), -32768);
@@ -805,24 +885,26 @@ void filter_lowPass(short* samples, int sampleCount, int channel, int channels, 
 	}
 }
 
-void voiceEffect_water(short* samples, int sampleCount, int channels)
+void voiceEffect_water(ClientEffectData& effectData, short* samples, int sampleCount, int channels)
 {
 	for (int channel = 0; channel < channels; channel++)
 	{
-		filter_lowPass(samples, sampleCount, channel, channels, Shared::status()->waterEffect.scale, Shared::status()->waterEffect.smooth);
+		filter_lowPass(effectData, samples, sampleCount, channel, channels, Shared::status()->waterEffect.scale, Shared::status()->waterEffect.smooth);
 	}
 }
 
-void voiceEffect_wall(short* samples, int sampleCount, int channels)
+void voiceEffect_wall(ClientEffectData& effectData, short* samples, int sampleCount, int channels)
 {
 	for (int channel = 0; channel < channels; channel++)
 	{
-		filter_lowPass(samples, sampleCount, channel, channels, 50.0, 0.5);
+		filter_lowPass(effectData, samples, sampleCount, channel, channels, Shared::status()->wallEffect.scale, Shared::status()->wallEffect.smooth);
 	}
 }
 
 void voiceEffect_volume(short* samples, int sampleCount, int channels, float clientVolume)
 {
+	clientVolume = min(1.0f, max(0.0f, clientVolume));
+
 	for (int i = 0; i < sampleCount * channels; i++)
 	{
 		samples[i] = (short)(samples[i] * clientVolume);
@@ -851,7 +933,7 @@ void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 serverConnectionHandlerID,
 	}
 
 	//data has to be processed => client must be talking
-	if (client.talking != true)
+	if (!client.talking)
 		client.talking = true;
 
 	//move this to volume effect?
@@ -865,16 +947,31 @@ void ts3plugin_onEditPostProcessVoiceDataEvent(uint64 serverConnectionHandlerID,
 	//Sending average volume to Gmod
 	client.volume_ts = totalSampleVolume / sampleCount / VOLUME_MAX;
 
+	ClientEffectData& effectData = GetClientEffectData(clientID);
+	if (effectData.lowpass_channels != channels)
+		effectData.initLowpass(channels);
+
+	if (effectData.currentEffect != client.effect)
+	{
+		if (effectData.currentEffect == VoiceEffect::Water || 
+			effectData.currentEffect == VoiceEffect::Wall)
+			effectData.resetLowpass();
+
+		effectData.changeEffect(client.effect);
+	}
+
 	switch (client.effect)
 	{
 	case VoiceEffect::Radio:
 		voiceEffect_radio(samples, sampleCount, channels);
 		break;
 	case VoiceEffect::Water:
-		voiceEffect_water(samples, sampleCount, channels);
+		voiceEffect_water(effectData, samples, sampleCount, channels);
+		clientVolume *= Shared::status()->waterEffect.boost;
 		break;
 	case VoiceEffect::Wall:
-		voiceEffect_wall(samples, sampleCount, channels);
+		voiceEffect_wall(effectData, samples, sampleCount, channels);
+		clientVolume *= Shared::status()->wallEffect.boost;
 		break;
 	/*case VoiceEffect::None:
 	default:

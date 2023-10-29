@@ -100,6 +100,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>.\source\shared;.\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <BuildStlModules>false</BuildStlModules>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -119,6 +120,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>.\source\shared;.\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <BuildStlModules>false</BuildStlModules>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -138,6 +140,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>.\source\shared;.\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <BuildStlModules>false</BuildStlModules>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -157,6 +160,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>.\source\shared;.\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <BuildStlModules>false</BuildStlModules>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
